@@ -1,5 +1,6 @@
 import Foundation
 import RealityKit
+import Metal
 import Compression
 import simd
 
@@ -127,9 +128,9 @@ final class WorldLoader: @unchecked Sendable {
                     count: count, position: d(.float3, 0), scale: d(.float3, 3), rotation: d(.float4, 6),
                     opacity: d(.float, 10), sphericalHarmonics: (d(.float3, 11), .zero))
                 let res = GaussianSplatResource(br)
-                res.scaleActivation = .identity
-                res.opacityActivation = .identity
-                res.sortingMode = .distance
+                res.scaleActivation = GaussianSplatResource.ActivationFunction.identity
+                res.opacityActivation = GaussianSplatResource.ActivationFunction.identity
+                res.sortingMode = GaussianSplatResource.SortingMode.distance
                 let e = Entity()
                 e.name = "world"
                 e.components.set(GaussianSplatComponent(res))

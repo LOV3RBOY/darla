@@ -3,7 +3,7 @@ import RealityKit
 
 @main
 struct DarlaApp: App {
-    var body: some Scene {
+    var body: some SwiftUI.Scene {
         WindowGroup { RootView().preferredColorScheme(.dark).statusBarHidden() }
     }
 }

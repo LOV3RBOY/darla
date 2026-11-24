@@ -20,7 +20,9 @@ final class Experience {
     var loadError: String?
     var started = false
     var bloomed: [Bool] = []
-    var toastTitle = "", toastKicker = "", toastLine = ""
+    var toastTitle = ""
+    var toastKicker = ""
+    var toastLine = ""
     var toastVisible = false
     var nearScreen = false
     var playing = false
@@ -58,7 +60,8 @@ final class Experience {
     @ObservationIgnored private var screenTexture: TextureResource?
     let arcade = PetalRun()
     @ObservationIgnored private var camPos = SIMD3<Float>(4.18, 2.3, 2.26)
-    @ObservationIgnored private var yaw: Float = 0, pitch: Float = 0
+    @ObservationIgnored private var yaw: Float = 0
+    @ObservationIgnored private var pitch: Float = 0
     @ObservationIgnored private var flight: (from: SIMD3<Float>, to: SIMD3<Float>, fq: simd_quatf, tq: simd_quatf, t: Float, dur: Float)?
     @ObservationIgnored private var targetSize: Float = 0.2
     @ObservationIgnored private var screenClock: Float = 0
