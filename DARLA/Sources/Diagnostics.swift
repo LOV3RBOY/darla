@@ -33,7 +33,9 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
             buildReport()
             // self-heal: step detail down one level after an unexpected exit
             if let lower = Quality(rawValue: Quality.current.rawValue - 1) {
-                pendingReport = (pendingReport ?? "") + "\n\nDetail lowered to \(lower.label) for stability."
+                var r: String = pendingReport ?? ""
+                r += "\n\nDetail lowered to " + lower.label + " for stability."
+                pendingReport = r
                 autoLowered = lower.label
                 Quality.current = lower
             }
@@ -87,10 +89,17 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
 
     private func buildReport() {
         var out = "DARLA crash report\n"
-        if let mx = try? String(contentsOf: mxURL, encoding: .utf8), !mx.isEmpty { out += "\n— Apple diagnostics —\n" + mx.suffix(6000) + "\n" }
+        if let mx = try? String(contentsOf: mxURL, encoding: .utf8), !mx.isEmpty {
+            let tail = String(mx.suffix(6000))
+            out += "\n— Apple diagnostics —\n"
+            out += tail
+            out += "\n"
+        }
         if let prev = try? String(contentsOf: prevCrumbsURL, encoding: .utf8) {
-            let lines = prev.split(separator: "\n").suffix(60)
-            out += "\n— Last moments —\n" + lines.joined(separator: "\n")
+            let lines: [Substring] = Array(prev.split(separator: "\n").suffix(60))
+            let joined: String = lines.joined(separator: "\n")
+            out += "\n— Last moments —\n"
+            out += joined
         }
         pendingReport = out
     }
@@ -115,7 +124,11 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
         let prior = (try? String(contentsOf: mxURL, encoding: .utf8)) ?? ""
         try? (prior + text).data(using: .utf8)?.write(to: mxURL, options: .atomic)
         DispatchQueue.main.async {
-            if self.pendingReport == nil { self.pendingReport = "DARLA crash report\n\n— Apple diagnostics —\n" + text }
+            if self.pendingReport == nil {
+                var r = "DARLA crash report\n\n— Apple diagnostics —\n"
+                r += text
+                self.pendingReport = r
+            }
             NotificationCenter.default.post(name: .darlaDiagnostics, object: nil)
         }
     }
