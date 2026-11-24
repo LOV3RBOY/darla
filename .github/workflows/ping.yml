@@ -1,0 +1,13 @@
+name: Ping
+on: [push, workflow_dispatch]
+permissions:
+  contents: write
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir p && cd p && git init -q && git checkout -q -b ci-ping
+          echo "ping ok $(date -u) sha ${{ github.sha }}" > ping.txt
+          git add . && git -c user.name=ci -c user.email=ci@local commit -qm ping
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-ping
