@@ -95,13 +95,13 @@ struct HUD: View {
     let exp: Experience
     @Binding var showPlaces: Bool
     var body: some View {
-        VStack {
+        VStack(spacing: 12) {
             HStack(alignment: .top) {
                 QuestCard(exp: exp)
                 Spacer()
                 VStack(spacing: 10) {
-                    RoundButton(symbol: "map") { showPlaces = true }
-                    RoundButton(symbol: "scope") { exp.recenter() }
+                    RoundButton(symbol: exp.mode == .orbit ? "scope" : "airplane") { exp.toggleMode() }
+                    RoundButton(symbol: "list.bullet") { showPlaces = true }
                 }
             }
             Spacer()
@@ -112,7 +112,6 @@ struct HUD: View {
                 }
                 .glassEffect(.regular.tint(Palette.neon.opacity(0.7)).interactive(), in: .capsule)
                 .shadow(color: Palette.neon.opacity(0.8), radius: 22)
-                .padding(.bottom, 24)
                 .transition(.scale.combined(with: .opacity))
             }
             HStack(alignment: .bottom) {
@@ -120,8 +119,40 @@ struct HUD: View {
                 Spacer()
                 SizeRail(exp: exp)
             }
+            PlaceStrip(exp: exp)
         }
-        .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 10)
+        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 6)
+    }
+}
+
+/// Destinations as cards: tap to glide there. Sleeping flowers glow, bloomed ones show a sun dot.
+struct PlaceStrip: View {
+    let exp: Experience
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(exp.places) { p in
+                    let locked = p.id == "screen" && !exp.awake
+                    let done = p.flower.map { exp.bloomed.indices.contains($0) && exp.bloomed[$0] } ?? false
+                    Button { if !locked { exp.cancelAutopilot(); exp.go(to: p) } } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: icon(p.id, locked)).font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(done ? Palette.sun : (p.flower != nil ? Palette.orchid : Palette.ink))
+                            Text(short(p)).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink.opacity(locked ? 0.4 : 1))
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 11)
+                    }
+                    .glassEffect(exp.focusID == p.id ? .regular.tint(Palette.sun.opacity(0.35)).interactive() : .regular.interactive(), in: .capsule)
+                    .disabled(locked)
+                }
+            }
+            .padding(.horizontal, 2).padding(.vertical, 4)
+        }
+        .scrollClipDisabled()
+    }
+    private func short(_ p: Place) -> String { p.name.replacingOccurrences(of: "The ", with: "").capitalized }
+    private func icon(_ id: String, _ locked: Bool) -> String {
+        switch id { case "shrine": return "house"; case "screen": return locked ? "lock.fill" : "gamecontroller.fill"; default: return "camera.macro" }
     }
 }
 
@@ -175,7 +206,7 @@ struct HoldArrow: View {
 /// The standout control: a glowing vertical rail that sets your size from ant to giant, with rise/sink buttons.
 struct SizeRail: View {
     let exp: Experience
-    private let h: CGFloat = 230
+    private let h: CGFloat = 170
     var body: some View {
         VStack(spacing: 10) {
             ZStack(alignment: .bottom) {
@@ -193,7 +224,7 @@ struct SizeRail: View {
             }
             .gesture(DragGesture(minimumDistance: 0).onChanged { v in
                 let f = Float(1 - max(0, min(1, v.location.y / h)))
-                exp.setSize(0.01 * pow(600, f))
+                exp.setSizeFromRail(0.01 * pow(600, f))
             })
         }
     }
@@ -227,8 +258,8 @@ struct PlacesSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Travel").font(.display(28)).padding(.bottom, 10)
-                ForEach(exp.places) { p in
-                    Button { show = false; exp.fly(to: p) } label: {
+                ForEach(exp.places.filter { $0.id != "screen" || exp.awake }) { p in
+                    Button { show = false; exp.cancelAutopilot(); exp.go(to: p) } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(p.name).font(.display(20, .regular)).foregroundStyle(Palette.ink)
@@ -272,60 +303,69 @@ struct TouchLayer: View {
     let exp: Experience
     @State private var origin: CGPoint?
     @State private var knob: CGPoint = .zero
-    @State private var lastLook: CGSize = .zero
-    @State private var pinchBase: Float = 0
+    @State private var last: CGSize = .zero
+    @State private var pinchLast: CGFloat = 1
     private let radius: CGFloat = 62
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                HStack(spacing: 0) {
-                    // left: floating analog stick that appears under the thumb
+                if exp.playing {
+                    Color.clear.contentShape(Rectangle()).onTapGesture { exp.tapArcade() }
+                } else if exp.mode == .orbit {
+                    // one finger: circle around what you're looking at. tap: glide to a glowing bud.
                     Color.clear.contentShape(Rectangle())
-                        .frame(width: geo.size.width * 0.46)
-                        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("touch"))
+                        .gesture(DragGesture(minimumDistance: 3)
                             .onChanged { v in
-                                if origin == nil { origin = v.startLocation; UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.5) }
-                                var d = CGSize(width: v.location.x - origin!.x, height: v.location.y - origin!.y)
-                                let m = hypot(d.width, d.height)
-                                if m > radius { d.width *= radius / m; d.height *= radius / m }
-                                knob = CGPoint(x: d.width, y: d.height)
-                                // gentle response curve: precise near the center, fast at the edge
-                                let nx = Float(d.width / radius), ny = Float(-d.height / radius)
-                                let mag = min(1, sqrt(nx * nx + ny * ny)), curved = mag * mag * 0.65 + mag * 0.35
-                                exp.setStick(mag > 0.001 ? SIMD2(nx, ny) / mag * curved : .zero)
+                                exp.drag(dx: Float(v.translation.width - last.width), dy: Float(v.translation.height - last.height))
+                                last = v.translation
                             }
-                            .onEnded { _ in origin = nil; knob = .zero; exp.setStick(.zero) })
-                    // right: look, and tap to glide to a glowing bud
-                    Color.clear.contentShape(Rectangle())
-                        .gesture(DragGesture(minimumDistance: 4)
-                            .onChanged { v in
-                                exp.look(dx: Float(v.translation.width - lastLook.width), dy: Float(v.translation.height - lastLook.height))
-                                lastLook = v.translation
-                            }
-                            .onEnded { _ in lastLook = .zero })
+                            .onEnded { _ in last = .zero })
                         .simultaneousGesture(SpatialTapGesture(coordinateSpace: .named("touch")).onEnded { e in exp.tap(at: e.location) })
-                }
-                if let o = origin {
-                    ZStack {
-                        Circle().strokeBorder(.white.opacity(0.28), lineWidth: 1.5).frame(width: radius * 2, height: radius * 2)
-                            .background(Circle().fill(.white.opacity(0.06)))
-                        Circle().fill(.white.opacity(0.85)).frame(width: 44, height: 44)
-                            .shadow(color: Palette.sun.opacity(0.7), radius: 12)
-                            .offset(x: knob.x, y: knob.y)
+                } else {
+                    HStack(spacing: 0) {
+                        Color.clear.contentShape(Rectangle())
+                            .frame(width: geo.size.width * 0.46)
+                            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("touch"))
+                                .onChanged { v in
+                                    if origin == nil { origin = v.startLocation; UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.5) }
+                                    var d = CGSize(width: v.location.x - origin!.x, height: v.location.y - origin!.y)
+                                    let m = hypot(d.width, d.height)
+                                    if m > radius { d.width *= radius / m; d.height *= radius / m }
+                                    knob = CGPoint(x: d.width, y: d.height)
+                                    let nx = Float(d.width / radius), ny = Float(-d.height / radius)
+                                    let mag = min(1, sqrt(nx * nx + ny * ny)), curved = mag * mag * 0.65 + mag * 0.35
+                                    exp.setStick(mag > 0.001 ? SIMD2(nx, ny) / mag * curved : .zero)
+                                }
+                                .onEnded { _ in origin = nil; knob = .zero; exp.setStick(.zero) })
+                        Color.clear.contentShape(Rectangle())
+                            .gesture(DragGesture(minimumDistance: 3)
+                                .onChanged { v in
+                                    exp.drag(dx: Float(v.translation.width - last.width), dy: Float(v.translation.height - last.height))
+                                    last = v.translation
+                                }
+                                .onEnded { _ in last = .zero })
                     }
-                    .position(o).allowsHitTesting(false)
+                    if let o = origin {
+                        ZStack {
+                            Circle().strokeBorder(.white.opacity(0.28), lineWidth: 1.5).frame(width: radius * 2, height: radius * 2)
+                                .background(Circle().fill(.white.opacity(0.06)))
+                            Circle().fill(.white.opacity(0.85)).frame(width: 44, height: 44)
+                                .shadow(color: Palette.sun.opacity(0.7), radius: 12)
+                                .offset(x: knob.x, y: knob.y)
+                        }
+                        .position(o).allowsHitTesting(false)
+                    }
                 }
-                if exp.showCoach && !exp.touring && !exp.playing { Coach().allowsHitTesting(false) }
-                if exp.playing { Color.clear.contentShape(Rectangle()).onTapGesture { exp.tapArcade() } }
+                if exp.showCoach && !exp.touring && !exp.playing { Coach(orbit: exp.mode == .orbit).allowsHitTesting(false) }
             }
-            .coordinateSpace(name: "touch")
+            .coordinateSpace(.named("touch"))
             .simultaneousGesture(MagnifyGesture()
                 .onChanged { v in
-                    if pinchBase == 0 { pinchBase = exp.size }
-                    exp.setSize(pinchBase / Float(max(0.2, v.magnification)))
+                    let k = Float(pinchLast / max(0.2, v.magnification)); pinchLast = v.magnification
+                    exp.zoom(by: k)
                 }
-                .onEnded { _ in pinchBase = 0 })
+                .onEnded { _ in pinchLast = 1 })
             .onAppear { exp.viewSize = geo.size }
             .onChange(of: geo.size) { _, s in exp.viewSize = s }
         }
@@ -333,21 +373,24 @@ struct TouchLayer: View {
 }
 
 struct Coach: View {
-    @State private var pulse = false
+    let orbit: Bool
     var body: some View {
-        HStack {
-            VStack(spacing: 8) {
-                Image(systemName: "hand.point.up.left.fill").font(.system(size: 28)).symbolEffect(.pulse)
-                Text("Hold & drag\nto fly").font(.system(size: 13, weight: .semibold)).multilineTextAlignment(.center)
-            }.frame(maxWidth: .infinity)
-            VStack(spacing: 8) {
-                Image(systemName: "hand.draw.fill").font(.system(size: 28)).symbolEffect(.pulse)
-                Text("Drag to look\nTap a glow to travel").font(.system(size: 13, weight: .semibold)).multilineTextAlignment(.center)
-            }.frame(maxWidth: .infinity)
+        VStack(spacing: 18) {
+            HStack(spacing: 34) {
+                tip("hand.draw.fill", orbit ? "Drag to circle" : "Left thumb flies")
+                tip("hand.pinch.fill", "Pinch to get close")
+                tip("hand.tap.fill", "Tap a glow to travel")
+            }
         }
-        .foregroundStyle(.white.opacity(0.85))
+        .foregroundStyle(.white.opacity(0.9))
         .shadow(color: .black.opacity(0.7), radius: 10)
-        .frame(maxHeight: .infinity, alignment: .center).offset(y: 70)
+        .frame(maxHeight: .infinity, alignment: .center).offset(y: 40)
+    }
+    private func tip(_ s: String, _ t: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: s).font(.system(size: 26)).symbolEffect(.pulse)
+            Text(t).font(.system(size: 12, weight: .semibold)).multilineTextAlignment(.center).frame(width: 86)
+        }
     }
 }
 

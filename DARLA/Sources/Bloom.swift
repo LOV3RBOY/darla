@@ -40,20 +40,28 @@ final class BloomController {
         return 1 + c3 * k * k * k + c1 * k * k
     }
 
+    private var idleClock: Float = 0
+
+    /// Writes only what changed: every frame while a flower is opening, ~12 Hz for idle pulse/breathing.
     func update(dt: Float) {
         time += dt
+        idleClock += dt
+        let animating = flowers.contains { $0.phase == .blooming || $0.dirty }
+        guard animating || idleClock > 1.0 / 12 else { return }
+        let idleTick = idleClock > 1.0 / 12
+        if idleTick { idleClock = 0 }
         buffer.withUnsafeMutableBytes { raw in
             let base = raw.bindMemory(to: Float.self).baseAddress!
             for f in flowers {
                 switch f.phase {
                 case .dormant:
-                    if f.dirty || Int(time * 30) % 2 == 0 { write(f, base: base, open: 0, glow: 0) }
+                    if f.dirty || idleTick { write(f, base: base, open: 0, glow: 0) }
                 case .blooming:
                     f.t += dt
                     write(f, base: base, open: f.t / Self.bloomDuration, glow: 1)
                     if f.t >= Self.bloomDuration + 0.8 { f.phase = .alive }
                 case .alive:
-                    write(f, base: base, open: 1.2, glow: 0)
+                    if f.dirty || idleTick { write(f, base: base, open: 1.2, glow: 0) }
                 }
                 f.dirty = false
             }
