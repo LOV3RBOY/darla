@@ -100,7 +100,7 @@ final class WorldLoader: @unchecked Sendable {
             let frac = Float(1 << Int(base[13]))
             let nf = manifest.flowerCount
             let tierCount = manifest.tiers.indices.contains(Quality.current.rawValue) ? manifest.tiers[Quality.current.rawValue] : n
-            flowerCount = nf; staticCount = min(n, tierCount) - nf
+            flowerCount = nf; staticCount = max(nf, min(n, tierCount))   // one layer: flowers + world, sorted together
             let posO = 16, alO = posO + n * 9, colO = alO + n, scO = colO + 3 * n, roO = scO + 3 * n
 
             @inline(__always) func splat(_ i: Int) -> (SIMD3<Float>, SIMD3<Float>, SIMD4<Float>, Float, SIMD3<Float>) {
@@ -140,7 +140,7 @@ final class WorldLoader: @unchecked Sendable {
             staticBuffer.withUnsafeMutableBytes { dst in
                 let b = dst.baseAddress!
                 for j in 0..<sc {
-                    let (p, s, r, a, c) = splat(nf + j)
+                    let (p, s, r, a, c) = splat(j)
                     let o = b + j * kStaticStride
                     o.storeBytes(of: p.x, toByteOffset: 0, as: Float.self)
                     o.storeBytes(of: p.y, toByteOffset: 4, as: Float.self)
@@ -198,7 +198,8 @@ final class WorldLoader: @unchecked Sendable {
                 if count < 200_000 { throw WorldError.tooMany }
             }
         }
-        let fl = try entity(count: flowerCount, buffer: buffer, stride: kStride, half: false)
+        // Flowers live inside the single world layer so every splat depth-sorts together (no seams, no halos).
+        let fl = Entity()
         world!.name = "world"; fl.name = "flowers"
         return (world!, fl)
     }

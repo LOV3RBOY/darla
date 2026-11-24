@@ -47,23 +47,10 @@ final class BloomController {
         time += dt
         idleClock += dt
         // only touch the GPU buffer while a flower is actually changing
-        guard flowers.contains(where: { $0.phase == .blooming || $0.dirty }) else { return }
-        let idleTick = false
-        buffer.withUnsafeMutableBytes { raw in
-            let base = raw.bindMemory(to: Float.self).baseAddress!
-            for f in flowers {
-                switch f.phase {
-                case .dormant:
-                    if f.dirty || idleTick { write(f, base: base, open: 0, glow: 0) }
-                case .blooming:
-                    f.t += dt
-                    write(f, base: base, open: f.t / Self.bloomDuration, glow: 1)
-                    if f.t >= Self.bloomDuration + 0.8 { f.phase = .alive; f.dirty = true; continue }
-                case .alive:
-                    if f.dirty || idleTick { write(f, base: base, open: 1.2, glow: 0) }
-                }
-                f.dirty = false
-            }
+        // The captured flowers are never altered: bloom is pure light + particles, so the world stays pristine.
+        for f in flowers where f.phase == .blooming {
+            f.t += dt
+            if f.t >= Self.bloomDuration + 0.8 { f.phase = .alive }
         }
     }
 
