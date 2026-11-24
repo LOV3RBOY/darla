@@ -46,10 +46,9 @@ final class BloomController {
     func update(dt: Float) {
         time += dt
         idleClock += dt
-        let animating = flowers.contains { $0.phase == .blooming || $0.dirty }
-        guard animating || idleClock > 1.0 / 12 else { return }
-        let idleTick = idleClock > 1.0 / 12
-        if idleTick { idleClock = 0 }
+        // only touch the GPU buffer while a flower is actually changing
+        guard flowers.contains(where: { $0.phase == .blooming || $0.dirty }) else { return }
+        let idleTick = false
         buffer.withUnsafeMutableBytes { raw in
             let base = raw.bindMemory(to: Float.self).baseAddress!
             for f in flowers {
@@ -59,7 +58,7 @@ final class BloomController {
                 case .blooming:
                     f.t += dt
                     write(f, base: base, open: f.t / Self.bloomDuration, glow: 1)
-                    if f.t >= Self.bloomDuration + 0.8 { f.phase = .alive }
+                    if f.t >= Self.bloomDuration + 0.8 { f.phase = .alive; f.dirty = true; continue }
                 case .alive:
                     if f.dirty || idleTick { write(f, base: base, open: 1.2, glow: 0) }
                 }
@@ -68,41 +67,35 @@ final class BloomController {
         }
     }
 
-    /// open: 0 = bud, 1 = fully open (values above 1 = settled + breathing).
+    /// open: 0 = dormant, 0..1 = blooming, >= 1.2 = alive.
+    /// Geometry is never collapsed: the real flower always keeps its exact shape and detail.
+    /// Dormant = softly shaded and cool; blooming = a gentle swell with a warm wave of light rolling outward from the heart.
     private func write(_ f: Flower, base: UnsafeMutablePointer<Float>, open: Float, glow: Float) {
         let s = f.splats, n = s.info.count, c = s.center
         let dst = base + s.info.start * kFloatsPerSplat
-        let breathe = sin(time * 1.3 + c.x * 7) * 0.012
-        let pulse = 0.5 + 0.5 * sin(time * 2.2 + c.y * 5)
         s.rest.withUnsafeBufferPointer { restBuf in
             let rest = restBuf.baseAddress!
             for i in 0..<n {
                 let r = rest + i * kFloatsPerSplat, o = dst + i * kFloatsPerSplat
-                // per-splat progress: inner petals lead, outer ones follow
-                let local: Float
-                if open >= 1.2 { local = 1 } else {
-                    let d = s.delay[i]
-                    local = min(1, max(0, (open * 1.7 - d) / 0.9))
+                let d = s.delay[i]                                  // 0 at the heart .. ~0.7 at the tips
+                var e: Float = 1, wave: Float = 0
+                if open < 1.2 {
+                    let local = min(1, max(0, (open * 1.6 - d) / 0.7))
+                    e = local <= 0 ? 0 : (local >= 1 ? 1 : easeOutBack(local))
+                    wave = glow * sin(Float.pi * local)
                 }
-                let e = open >= 1.2 ? 1 : (local <= 0 ? 0 : (local >= 1 ? 1 : easeOutBack(local)))
-                var rel = SIMD3(r[0] - c.x, r[1] - c.y, r[2] - c.z)
-                // bud: pulled toward the center and twisted; opening unwinds the twist
-                let squeeze = 0.16 + 0.84 * e
-                let ang = (1 - e) * 1.25 * (0.6 + s.delay[i])
-                let ca = cos(ang), sa = sin(ang)
-                rel = SIMD3(rel.x * ca - rel.z * sa, rel.y * (0.55 + 0.45 * e), rel.x * sa + rel.z * ca) * squeeze
-                if open >= 1.2 { rel *= 1 + breathe * (0.5 + s.delay[i]) }
-                o[0] = c.x + rel.x; o[1] = c.y + rel.y; o[2] = c.z + rel.z
-                let sc = 0.45 + 0.55 * e
-                o[3] = r[3] * sc; o[4] = r[4] * sc; o[5] = r[5] * sc
-                o[10] = r[10] * (0.7 + 0.3 * e)
-                // color: dormant is a cool dim ghost with a soft pulse, blooming flares warm light mid-unfurl
-                let flare = glow * sin(Float.pi * min(1, local)) * 0.9
-                let dim = open == 0 ? (0.32 + 0.1 * pulse) : (0.32 + 0.68 * e)
+                // a small, elastic swell outward as the light passes (max ~5%), then settle exactly at rest
+                let swell = 1 + 0.05 * wave
+                o[0] = c.x + (r[0] - c.x) * swell
+                o[1] = c.y + (r[1] - c.y) * swell
+                o[2] = c.z + (r[2] - c.z) * swell
+                o[3] = r[3]; o[4] = r[4]; o[5] = r[5]
+                o[10] = r[10]
+                let dim: Float = open == 0 ? 0.62 : (0.62 + 0.38 * e)
                 for k in 0..<3 {
                     let col = 0.5 + 0.282095 * r[11 + k]
-                    let tint: Float = open == 0 ? (k == 0 ? 0.95 : (k == 1 ? 1.0 : 1.25)) : 1
-                    let lit = col * dim * tint + flare * (k == 2 ? 0.55 : 0.75)
+                    let cool: Float = open == 0 ? (k == 0 ? 0.94 : (k == 1 ? 0.98 : 1.08)) : 1
+                    let lit = col * dim * cool + wave * (k == 2 ? 0.28 : 0.42)
                     o[11 + k] = (lit - 0.5) / 0.282095
                 }
             }

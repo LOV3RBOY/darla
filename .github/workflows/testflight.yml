@@ -67,10 +67,8 @@ jobs:
           ( while true; do sleep 60; ci/report.sh "archiving (live)" build/archive.log; done ) &
           if ! xcodebuild -project DARLA.xcodeproj -scheme DARLA -configuration Release \
             -destination 'generic/platform=iOS' -archivePath build/DARLA.xcarchive archive -skipPackagePluginValidation -skipMacroValidation \
-            -allowProvisioningUpdates -authenticationKeyPath ~/private_keys/AuthKey.p8 \
-            -authenticationKeyID "$KID" -authenticationKeyIssuerID "$IID" \
             DEVELOPMENT_TEAM="$TEAM" CURRENT_PROJECT_VERSION=${{ github.run_number }} \
-            CODE_SIGN_IDENTITY="Apple Distribution" > build/archive.log 2>&1; then
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" > build/archive.log 2>&1; then
             grep -E "error:" build/archive.log | sed 's#.*/Sources/##' | sort -u | head -40 | tee build/errors.txt | while IFS= read -r l; do echo "::error::$l"; done
             tail -30 build/archive.log
             exit 1

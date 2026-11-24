@@ -11,7 +11,7 @@
    ],
    "radius": 0.42,
    "start": 0,
-   "count": 30851
+   "count": 22262
   },
   {
    "id": "lily",
@@ -21,8 +21,8 @@
     4.3
    ],
    "radius": 0.3,
-   "start": 30851,
-   "count": 15251
+   "start": 22262,
+   "count": 5667
   },
   {
    "id": "callas",
@@ -32,8 +32,8 @@
     4.1
    ],
    "radius": 0.35,
-   "start": 46102,
-   "count": 7481
+   "start": 27929,
+   "count": 3682
   },
   {
    "id": "glass",
@@ -43,8 +43,8 @@
     4.14
    ],
    "radius": 0.4,
-   "start": 53583,
-   "count": 6616
+   "start": 31611,
+   "count": 4037
   },
   {
    "id": "orchids",
@@ -54,11 +54,11 @@
     5.03
    ],
    "radius": 0.55,
-   "start": 60199,
-   "count": 28489
+   "start": 35648,
+   "count": 18404
   }
  ],
- "flowerCount": 88688,
+ "flowerCount": 54052,
  "tiers": [
   700000,
   1100000,

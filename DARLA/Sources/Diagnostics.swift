@@ -12,7 +12,10 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
     private let lock = NSLock()
     private var timer: Timer?
     private var peakMB: Double = 0
+    private var frames = 0, frameTime: Double = 0, worstFrame: Double = 0
+    func frame(_ dt: Double) { frames += 1; frameTime += dt; worstFrame = max(worstFrame, dt) }
     private(set) var pendingReport: String?
+    private(set) var autoLowered: String?
 
     private var crumbsURL: URL { dir.appendingPathComponent("breadcrumbs.txt") }
     private var prevCrumbsURL: URL { dir.appendingPathComponent("breadcrumbs.prev.txt") }
@@ -26,7 +29,17 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
             try? fm.removeItem(at: prevCrumbsURL)
             try? fm.moveItem(at: crumbsURL, to: prevCrumbsURL)
         }
-        if crashedLastTime { buildReport() }
+        if crashedLastTime {
+            buildReport()
+            // self-heal: step detail down one level after an unexpected exit
+            if let lower = Quality(rawValue: Quality.current.rawValue - 1) {
+                var r: String = pendingReport ?? ""
+                r += "\n\nDetail lowered to " + lower.label + " for stability."
+                pendingReport = r
+                autoLowered = lower.label
+                Quality.current = lower
+            }
+        }
         fm.createFile(atPath: runningURL.path, contents: Data())
         MXMetricManager.shared.add(self)
         NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
@@ -40,6 +53,7 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
             FileManager.default.createFile(atPath: self.runningURL.path, contents: Data())
         }
         let device = UIDevice.current
+        log("quality \(Quality.current.label)")
         log("launch · \(device.systemName) \(device.systemVersion) · \(Self.model()) · build \(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?")")
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.sample() }
     }
@@ -62,7 +76,9 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
         peakMB = max(peakMB, mb)
         let thermal: String
         switch ProcessInfo.processInfo.thermalState { case .nominal: thermal = "cool"; case .fair: thermal = "warm"; case .serious: thermal = "HOT"; case .critical: thermal = "CRITICAL"; @unknown default: thermal = "?" }
-        log(String(format: "mem %.0f MB (peak %.0f) · %@", mb, peakMB, thermal))
+        let fps = frames > 0 ? Double(frames) / max(frameTime, 0.001) : 0
+        log(String(format: "mem %.0f MB (peak %.0f) · %.0f fps · worst %.0f ms · %@", mb, peakMB, fps, worstFrame * 1000, thermal))
+        frames = 0; frameTime = 0; worstFrame = 0
         flush()
     }
 
@@ -73,10 +89,17 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
 
     private func buildReport() {
         var out = "DARLA crash report\n"
-        if let mx = try? String(contentsOf: mxURL, encoding: .utf8), !mx.isEmpty { out += "\n— Apple diagnostics —\n" + mx.suffix(6000) + "\n" }
+        if let mx = try? String(contentsOf: mxURL, encoding: .utf8), !mx.isEmpty {
+            let tail = String(mx.suffix(6000))
+            out += "\n— Apple diagnostics —\n"
+            out += tail
+            out += "\n"
+        }
         if let prev = try? String(contentsOf: prevCrumbsURL, encoding: .utf8) {
-            let lines = prev.split(separator: "\n").suffix(60)
-            out += "\n— Last moments —\n" + lines.joined(separator: "\n")
+            let lines: [Substring] = Array(prev.split(separator: "\n").suffix(60))
+            let joined: String = lines.joined(separator: "\n")
+            out += "\n— Last moments —\n"
+            out += joined
         }
         pendingReport = out
     }
@@ -101,7 +124,11 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
         let prior = (try? String(contentsOf: mxURL, encoding: .utf8)) ?? ""
         try? (prior + text).data(using: .utf8)?.write(to: mxURL, options: .atomic)
         DispatchQueue.main.async {
-            if self.pendingReport == nil { self.pendingReport = "DARLA crash report\n\n— Apple diagnostics —\n" + text }
+            if self.pendingReport == nil {
+                var r = "DARLA crash report\n\n— Apple diagnostics —\n"
+                r += text
+                self.pendingReport = r
+            }
             NotificationCenter.default.post(name: .darlaDiagnostics, object: nil)
         }
     }
