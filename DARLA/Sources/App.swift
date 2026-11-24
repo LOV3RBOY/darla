@@ -258,6 +258,7 @@ struct ToastView: View {
 struct PlacesSheet: View {
     let exp: Experience
     @Binding var show: Bool
+    @State private var quality = Quality.current
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
@@ -276,6 +277,13 @@ struct PlacesSheet: View {
                     }
                     Divider().opacity(0.3)
                 }
+                Text("Detail").font(.display(22)).padding(.top, 22)
+                Picker("Detail", selection: $quality) {
+                    ForEach(Quality.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: quality) { _, q in Quality.current = q }
+                Text("Ultra shows the full world. Changes apply next time you open DARLA.").font(.footnote).foregroundStyle(.white.opacity(0.55))
             }
             .padding(24)
         }

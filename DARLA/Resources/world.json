@@ -1,6 +1,6 @@
 {
- "count": 690092,
- "rawSize": 13111764,
+ "count": 1599324,
+ "rawSize": 30387172,
  "flowers": [
   {
    "id": "peony",
@@ -58,5 +58,10 @@
    "count": 28489
   }
  ],
- "flowerCount": 88688
+ "flowerCount": 88688,
+ "tiers": [
+  700000,
+  1100000,
+  1599324
+ ]
 }

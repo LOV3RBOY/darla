@@ -15,6 +15,7 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
     private var frames = 0, frameTime: Double = 0, worstFrame: Double = 0
     func frame(_ dt: Double) { frames += 1; frameTime += dt; worstFrame = max(worstFrame, dt) }
     private(set) var pendingReport: String?
+    private(set) var autoLowered: String?
 
     private var crumbsURL: URL { dir.appendingPathComponent("breadcrumbs.txt") }
     private var prevCrumbsURL: URL { dir.appendingPathComponent("breadcrumbs.prev.txt") }
@@ -28,7 +29,15 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
             try? fm.removeItem(at: prevCrumbsURL)
             try? fm.moveItem(at: crumbsURL, to: prevCrumbsURL)
         }
-        if crashedLastTime { buildReport() }
+        if crashedLastTime {
+            buildReport()
+            // self-heal: step detail down one level after an unexpected exit
+            if let lower = Quality(rawValue: Quality.current.rawValue - 1) {
+                pendingReport = (pendingReport ?? "") + "\n\nDetail lowered to \(lower.label) for stability."
+                autoLowered = lower.label
+                Quality.current = lower
+            }
+        }
         fm.createFile(atPath: runningURL.path, contents: Data())
         MXMetricManager.shared.add(self)
         NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
@@ -42,6 +51,7 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
             FileManager.default.createFile(atPath: self.runningURL.path, contents: Data())
         }
         let device = UIDevice.current
+        log("quality \(Quality.current.label)")
         log("launch · \(device.systemName) \(device.systemVersion) · \(Self.model()) · build \(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?")")
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.sample() }
     }
