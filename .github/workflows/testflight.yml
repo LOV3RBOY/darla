@@ -35,13 +35,16 @@ jobs:
           IID: f0ca6676-6d47-485a-804b-980f71405470
           TEAM: SG33765Y24
         run: |
-          set -o pipefail
-          xcodebuild -project DARLA.xcodeproj -scheme DARLA -configuration Release \
+          mkdir -p build
+          if ! xcodebuild -project DARLA.xcodeproj -scheme DARLA -configuration Release \
             -destination 'generic/platform=iOS' -archivePath build/DARLA.xcarchive archive \
             -allowProvisioningUpdates -authenticationKeyPath ~/private_keys/AuthKey.p8 \
             -authenticationKeyID "$KID" -authenticationKeyIssuerID "$IID" \
-            DEVELOPMENT_TEAM="$TEAM" CURRENT_PROJECT_VERSION=${{ github.run_number }} | tee build/archive.log | grep -E "error:|warning: unused|ARCHIVE" || true
-          test -d build/DARLA.xcarchive
+            DEVELOPMENT_TEAM="$TEAM" CURRENT_PROJECT_VERSION=${{ github.run_number }} > build/archive.log 2>&1; then
+            grep -E "error:" build/archive.log | sed 's#.*/Sources/##' | sort -u | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+            tail -30 build/archive.log
+            exit 1
+          fi
       - name: Upload to TestFlight
         env:
           KID: ${{ secrets.ASC_KEY_ID || '8A77HRD47W' }}
@@ -52,6 +55,3 @@ jobs:
           xcodebuild -exportArchive -archivePath build/DARLA.xcarchive -exportOptionsPlist ExportOptions.plist \
             -exportPath build/out -allowProvisioningUpdates -authenticationKeyPath ~/private_keys/AuthKey.p8 \
             -authenticationKeyID "$KID" -authenticationKeyIssuerID "$IID"
-      - name: Build log
-        if: failure()
-        run: grep -E "error:" -A3 build/archive.log | head -80 || true
