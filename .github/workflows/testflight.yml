@@ -45,7 +45,8 @@ jobs:
             -destination 'generic/platform=iOS' -archivePath build/DARLA.xcarchive archive \
             -allowProvisioningUpdates -authenticationKeyPath ~/private_keys/AuthKey.p8 \
             -authenticationKeyID "$KID" -authenticationKeyIssuerID "$IID" \
-            DEVELOPMENT_TEAM="$TEAM" CURRENT_PROJECT_VERSION=${{ github.run_number }} > build/archive.log 2>&1; then
+            DEVELOPMENT_TEAM="$TEAM" CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" > build/archive.log 2>&1; then
             grep -E "error:" build/archive.log | sed 's#.*/Sources/##' | sort -u | head -40 | tee build/errors.txt | while IFS= read -r l; do echo "::error::$l"; done
             tail -30 build/archive.log
             exit 1
@@ -59,7 +60,9 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM" ExportOptions.plist
           xcodebuild -exportArchive -archivePath build/DARLA.xcarchive -exportOptionsPlist ExportOptions.plist \
             -exportPath build/out -allowProvisioningUpdates -authenticationKeyPath ~/private_keys/AuthKey.p8 \
-            -authenticationKeyID "$KID" -authenticationKeyIssuerID "$IID"
+            -authenticationKeyID "$KID" -authenticationKeyIssuerID "$IID" > build/export.log 2>&1 \
+            || { grep -E "error" build/export.log | head -20 | tee build/errors.txt; exit 1; }
+          tail -5 build/export.log
       - name: Publish status for Claude
         if: always()
         run: |
