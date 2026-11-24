@@ -116,7 +116,7 @@ final class WorldLoader: @unchecked Sendable {
     }
 
     /// Builds the splat entity. If RealityKit refuses the full count, retries with fewer background splats.
-    func makeEntity() throws -> Entity {
+    @MainActor func makeEntity() throws -> Entity {
         var count = splatCount
         let floor = manifest.flowers.map { $0.start + $0.count }.max() ?? 0
         while true {
