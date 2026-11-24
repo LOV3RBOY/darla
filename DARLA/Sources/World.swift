@@ -25,8 +25,8 @@ struct WorldManifest: Codable {
 enum Quality: Int, CaseIterable {
     case smooth, high, ultra
     static var current: Quality {
-        get { Quality(rawValue: (UserDefaults.standard.object(forKey: "darla.quality") as? Int) ?? 2) ?? .ultra }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: "darla.quality") }
+        get { Quality(rawValue: (UserDefaults.standard.object(forKey: "darla.quality.v2") as? Int) ?? 2) ?? .ultra }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "darla.quality.v2") }
     }
     var label: String { ["Smooth", "High", "Ultra"][rawValue] }
 }

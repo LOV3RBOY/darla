@@ -21,6 +21,7 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
     private var prevCrumbsURL: URL { dir.appendingPathComponent("breadcrumbs.prev.txt") }
     private var runningURL: URL { dir.appendingPathComponent("session.running") }
     private var mxURL: URL { dir.appendingPathComponent("metrickit.txt") }
+    private var fatalURL: URL { dir.appendingPathComponent("fatal.txt") }
 
     func start() {
         let fm = FileManager.default
@@ -29,17 +30,8 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
             try? fm.removeItem(at: prevCrumbsURL)
             try? fm.moveItem(at: crumbsURL, to: prevCrumbsURL)
         }
-        if crashedLastTime {
-            buildReport()
-            // self-heal: step detail down one level after an unexpected exit
-            if let lower = Quality(rawValue: Quality.current.rawValue - 1) {
-                var r: String = pendingReport ?? ""
-                r += "\n\nDetail lowered to " + lower.label + " for stability."
-                pendingReport = r
-                autoLowered = lower.label
-                Quality.current = lower
-            }
-        }
+        if crashedLastTime { buildReport() }   // detail is never lowered automatically: the crash is not graphics load
+        installFatalHandlers(path: fatalURL.path)
         fm.createFile(atPath: runningURL.path, contents: Data())
         MXMetricManager.shared.add(self)
         NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
@@ -55,7 +47,7 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
         let device = UIDevice.current
         log("quality \(Quality.current.label)")
         log("launch · \(device.systemName) \(device.systemVersion) · \(Self.model()) · build \(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?")")
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.sample() }
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.tick() }
     }
 
     func markClean() {
@@ -69,6 +61,12 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
         crumbs.append("\(f.string(from: Date())) \(s)")
         if crumbs.count > 300 { crumbs.removeFirst(crumbs.count - 300) }
         lock.unlock()
+    }
+
+    private var ticks = 0
+    private func tick() {
+        ticks += 1
+        if ticks % 4 == 0 { sample() } else { flush() }
     }
 
     private func sample() {
@@ -93,6 +91,11 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
             let tail = String(mx.suffix(6000))
             out += "\n— Apple diagnostics —\n"
             out += tail
+            out += "\n"
+        }
+        if let fatal = try? String(contentsOf: fatalURL, encoding: .utf8), !fatal.isEmpty {
+            out += "\n— Fatal —\n"
+            out += String(fatal.prefix(5000))
             out += "\n"
         }
         if let prev = try? String(contentsOf: prevCrumbsURL, encoding: .utf8) {
@@ -151,3 +154,28 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
 }
 
 extension Notification.Name { static let darlaDiagnostics = Notification.Name("darlaDiagnostics") }
+
+// MARK: fatal capture — written straight to disk the instant the app dies
+
+private var gFatalFD: Int32 = -1
+
+private func fatalWrite(_ s: String) {
+    guard gFatalFD >= 0 else { return }
+    s.withCString { p in _ = write(gFatalFD, p, strlen(p)) }
+}
+
+private func installFatalHandlers(path: String) {
+    gFatalFD = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
+    NSSetUncaughtExceptionHandler { e in
+        let head = "EXCEPTION " + e.name.rawValue + ": " + (e.reason ?? "") + "\n"
+        fatalWrite(head + e.callStackSymbols.prefix(45).joined(separator: "\n") + "\n")
+    }
+    for sig in [SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGTRAP, SIGFPE] {
+        signal(sig) { s in
+            let thread = Thread.isMainThread ? "main" : "background"
+            fatalWrite("SIGNAL " + String(s) + " on " + thread + " thread\n" + Thread.callStackSymbols.prefix(45).joined(separator: "\n") + "\n")
+            signal(s, SIG_DFL)
+            raise(s)
+        }
+    }
+}

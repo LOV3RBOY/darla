@@ -445,7 +445,7 @@ struct CrashCard: View {
             Color.black.opacity(0.55).ignoresSafeArea()
             VStack(alignment: .leading, spacing: 14) {
                 Text("The last session ended unexpectedly").font(.display(24, .regular)).foregroundStyle(Palette.ink)
-                Text("Copy this report and paste it to Claude so it can be fixed.").font(.footnote).foregroundStyle(.white.opacity(0.7))
+                Text("Already copied. Just paste it to Claude.").font(.footnote).foregroundStyle(.white.opacity(0.7))
                 ScrollView { Text(text).font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.75)).frame(maxWidth: .infinity, alignment: .leading) }
                     .frame(maxHeight: 260)
                 HStack {
@@ -463,5 +463,6 @@ struct CrashCard: View {
             .glassEffect(.regular, in: .rect(cornerRadius: 26))
             .padding(20)
         }
+        .onAppear { UIPasteboard.general.string = text; copied = true }
     }
 }
