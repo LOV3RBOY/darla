@@ -33,7 +33,7 @@ jobs:
         env:
           KID: ${{ secrets.ASC_KEY_ID }}
           IID: ${{ secrets.ASC_ISSUER_ID }}
-          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          TEAM: SG33765Y24
         run: |
           set -o pipefail
           xcodebuild -project DARLA.xcodeproj -scheme DARLA -configuration Release \
@@ -46,7 +46,7 @@ jobs:
         env:
           KID: ${{ secrets.ASC_KEY_ID }}
           IID: ${{ secrets.ASC_ISSUER_ID }}
-          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          TEAM: SG33765Y24
         run: |
           /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM" ExportOptions.plist
           xcodebuild -exportArchive -archivePath build/DARLA.xcarchive -exportOptionsPlist ExportOptions.plist \
