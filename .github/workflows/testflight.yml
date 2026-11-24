@@ -8,23 +8,25 @@ permissions:
 concurrency:
   group: testflight
   cancel-in-progress: true
+env:
+  RUN: ${{ github.run_number }}
+  SHA: ${{ github.sha }}
+  TOKEN: ${{ github.token }}
+  REPO: ${{ github.repository }}
+  HOMEBREW_NO_AUTO_UPDATE: 1
+  HOMEBREW_NO_INSTALL_CLEANUP: 1
 jobs:
   build:
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
-      - name: Report started
-        run: |
-          mkdir -p /tmp/s0 && cd /tmp/s0 && git init -q && git checkout -q -b ci-status
-          echo "run ${{ github.run_number }} · commit ${{ github.sha }} · started $(date -u)" > status.txt
-          git add . && git -c user.name=ci -c user.email=ci@local commit -qm started
-          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-status
       - name: Check signing secrets
         env:
           K: ${{ secrets.ASC_KEY_P8 }}
         run: |
           if [ -z "$K" ]; then echo "::error::App Store Connect secrets not set yet"; exit 1; fi
       - uses: actions/checkout@v5
+      - run: ci/report.sh "checked out"
       - name: Select Xcode 27
         run: |
           ls -d /Applications/Xcode*.app
@@ -32,8 +34,13 @@ jobs:
           if [ -n "$X" ]; then sudo xcode-select -s "$X/Contents/Developer"; fi
           xcodebuild -version
           xcodebuild -version | grep -q "Xcode 27" || { echo "::error::Xcode 27 not available"; exit 1; }
+          ci/report.sh "xcode selected"
       - name: Generate project
-        run: brew install xcodegen && xcodegen generate
+        timeout-minutes: 8
+        run: |
+          ci/report.sh "installing xcodegen"
+          brew install xcodegen && xcodegen generate
+          ci/report.sh "project generated"
       - name: App Store Connect key
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
@@ -48,6 +55,7 @@ jobs:
           TEAM: SG33765Y24
         run: |
           mkdir -p build
+          ci/report.sh "archiving"
           if ! xcodebuild -project DARLA.xcodeproj -scheme DARLA -configuration Release \
             -destination 'generic/platform=iOS' -archivePath build/DARLA.xcarchive archive \
             -allowProvisioningUpdates -authenticationKeyPath ~/private_keys/AuthKey.p8 \
@@ -65,6 +73,7 @@ jobs:
           IID: f0ca6676-6d47-485a-804b-980f71405470
           TEAM: SG33765Y24
         run: |
+          ci/report.sh "exporting + uploading" build/archive.log
           /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM" ExportOptions.plist
           xcodebuild -exportArchive -archivePath build/DARLA.xcarchive -exportOptionsPlist ExportOptions.plist \
             -exportPath build/out -allowProvisioningUpdates -authenticationKeyPath ~/private_keys/AuthKey.p8 \
@@ -74,8 +83,5 @@ jobs:
       - name: Publish status for Claude
         if: always()
         run: |
-          mkdir -p /tmp/st && cd /tmp/st
-          { echo "run ${{ github.run_number }} · commit ${{ github.sha }} · ${{ job.status }}"; date -u; cat $GITHUB_WORKSPACE/build/errors.txt 2>/dev/null; tail -15 $GITHUB_WORKSPACE/build/archive.log 2>/dev/null; echo '--- export'; tail -25 $GITHUB_WORKSPACE/build/export.log 2>/dev/null; } > status.txt
-          git init -q && git checkout -q -b ci-status
-          git add status.txt && git -c user.name=ci -c user.email=ci@local commit -qm "status ${{ github.run_number }}"
-          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-status
+          { cat build/errors.txt 2>/dev/null; tail -12 build/archive.log 2>/dev/null; echo '--- export'; tail -25 build/export.log 2>/dev/null; } > /tmp/final.txt
+          ci/report.sh "${{ job.status }}" /tmp/final.txt
