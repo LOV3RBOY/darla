@@ -41,6 +41,7 @@ jobs:
           mkdir -p ~/private_keys
           printf '%s' "$ASC_KEY_P8" > ~/private_keys/AuthKey.p8
       - name: Archive
+        timeout-minutes: 15
         env:
           KID: ${{ secrets.ASC_KEY_ID || '8A77HRD47W' }}
           IID: f0ca6676-6d47-485a-804b-980f71405470
@@ -52,12 +53,13 @@ jobs:
             -allowProvisioningUpdates -authenticationKeyPath ~/private_keys/AuthKey.p8 \
             -authenticationKeyID "$KID" -authenticationKeyIssuerID "$IID" \
             DEVELOPMENT_TEAM="$TEAM" CURRENT_PROJECT_VERSION=${{ github.run_number }} \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" > build/archive.log 2>&1; then
+            CODE_SIGN_IDENTITY="Apple Distribution" > build/archive.log 2>&1; then
             grep -E "error:" build/archive.log | sed 's#.*/Sources/##' | sort -u | head -40 | tee build/errors.txt | while IFS= read -r l; do echo "::error::$l"; done
             tail -30 build/archive.log
             exit 1
           fi
       - name: Upload to TestFlight
+        timeout-minutes: 10
         env:
           KID: ${{ secrets.ASC_KEY_ID || '8A77HRD47W' }}
           IID: f0ca6676-6d47-485a-804b-980f71405470
@@ -73,7 +75,7 @@ jobs:
         if: always()
         run: |
           mkdir -p /tmp/st && cd /tmp/st
-          { echo "run ${{ github.run_number }} · commit ${{ github.sha }} · ${{ job.status }}"; date -u; cat $GITHUB_WORKSPACE/build/errors.txt 2>/dev/null; tail -15 $GITHUB_WORKSPACE/build/archive.log 2>/dev/null; } > status.txt
+          { echo "run ${{ github.run_number }} · commit ${{ github.sha }} · ${{ job.status }}"; date -u; cat $GITHUB_WORKSPACE/build/errors.txt 2>/dev/null; tail -15 $GITHUB_WORKSPACE/build/archive.log 2>/dev/null; echo '--- export'; tail -25 $GITHUB_WORKSPACE/build/export.log 2>/dev/null; } > status.txt
           git init -q && git checkout -q -b ci-status
           git add status.txt && git -c user.name=ci -c user.email=ci@local commit -qm "status ${{ github.run_number }}"
           git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-status
