@@ -1,0 +1,32 @@
+name: DARLA
+options:
+  bundleIdPrefix: com.outoforder
+  deploymentTarget:
+    iOS: "27.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1"
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+targets:
+  DARLA:
+    type: application
+    platform: iOS
+    sources:
+      - path: DARLA/Sources
+      - path: DARLA/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.outoforder.darla
+        INFOPLIST_KEY_CFBundleDisplayName: DARLA
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UIStatusBarHidden: YES
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment

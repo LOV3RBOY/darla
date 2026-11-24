@@ -1,0 +1,61 @@
+{
+ "count": 1915300,
+ "rawSize": 36390716,
+ "flowers": [
+  {
+   "id": "peony",
+   "center": [
+    2.37,
+    0.6,
+    4.15
+   ],
+   "radius": 0.42,
+   "start": 0,
+   "count": 30851
+  },
+  {
+   "id": "lily",
+   "center": [
+    2.0,
+    1.45,
+    4.3
+   ],
+   "radius": 0.3,
+   "start": 30851,
+   "count": 15251
+  },
+  {
+   "id": "callas",
+   "center": [
+    1.3,
+    0.6,
+    4.1
+   ],
+   "radius": 0.35,
+   "start": 46102,
+   "count": 7481
+  },
+  {
+   "id": "glass",
+   "center": [
+    1.77,
+    2.2,
+    4.14
+   ],
+   "radius": 0.4,
+   "start": 53583,
+   "count": 6616
+  },
+  {
+   "id": "orchids",
+   "center": [
+    2.45,
+    2.95,
+    5.03
+   ],
+   "radius": 0.55,
+   "start": 60199,
+   "count": 28489
+  }
+ ]
+}
