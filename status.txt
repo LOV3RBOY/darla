@@ -1,0 +1,41 @@
+run 27 · commit bc34d7a6eef3cd4f6bc3bfada3486ed124ae1f16 · archiving (live) · 09:09:47
+
+AppIntentsSSUTraining (in target 'DARLA' from project 'DARLA')
+    cd /Users/runner/work/darla/darla
+    /Applications/Xcode_27.2.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app/Info.plist --temp-dir-path /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/IntermediateBuildFilesPath/DARLA.build/Release-iphoneos/DARLA.build/ssu --bundle-id com.outoforder.darla --product-path /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app --extracted-metadata-path /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app/Metadata.appintents --deployment-postprocessing --metadata-file-list /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/IntermediateBuildFilesPath/DARLA.build/Release-iphoneos/DARLA.build/DARLA.DependencyMetadataFileList --source-file /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app/Info.plist --archive-ssu-assets
+2026-11-24 09:07:38.741 appintentsnltrainingprocessor[5646:20101] Parsing options for appintentsnltrainingprocessor
+2026-11-24 09:07:38.742 appintentsnltrainingprocessor[5646:20101] Starting AppIntents SSU YAML Generation
+2026-11-24 09:07:38.766 appintentsnltrainingprocessor[5646:20101] No AppShortcuts found - Skipping.
+
+Strip /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app/DARLA (in target 'DARLA' from project 'DARLA')
+    cd /Users/runner/work/darla/darla
+    /Applications/Xcode_27.2.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip -D /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app/DARLA
+
+SetOwnerAndGroup runner:staff /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app (in target 'DARLA' from project 'DARLA')
+    cd /Users/runner/work/darla/darla
+    /usr/sbin/chown -RH runner:staff /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app
+
+SetMode u+w,go-w,a+rX /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app (in target 'DARLA' from project 'DARLA')
+    cd /Users/runner/work/darla/darla
+    /bin/chmod -RH u+w,go-w,a+rX /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app
+
+RegisterExecutionPolicyException /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app (in target 'DARLA' from project 'DARLA')
+    cd /Users/runner/work/darla/darla
+    builtin-RegisterExecutionPolicyException /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app
+
+Validate /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app (in target 'DARLA' from project 'DARLA')
+    cd /Users/runner/work/darla/darla
+    builtin-validationUtility /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app (in target 'DARLA' from project 'DARLA')
+    cd /Users/runner/work/darla/darla
+    /usr/bin/touch -c /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/InstallationBuildProductsLocation/Applications/DARLA.app
+
+PruneExplicitPrecompiledModules /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/IntermediateBuildFilesPath/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/runner/Library/Developer/Xcode/DerivedData/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/runner/Library/Developer/Xcode/DerivedData/DARLA-dfpxjlzqdoridkaqkhgzjjahsltk/Build/Intermediates.noindex/ArchiveIntermediates/DARLA/IntermediateBuildFilesPath/SwiftExplicitPrecompiledModules
+
+** ARCHIVE SUCCEEDED **
+
