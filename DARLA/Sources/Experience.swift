@@ -152,7 +152,6 @@ final class Experience {
     // MARK: frame
 
     func tick(_ dt: Float) {
-        Diagnostics.shared.frame(Double(dt))
         let dt = min(dt, 1 / 20)
         if mode == .orbit || playing { applyOrbit(dt: dt) } else { applyFree(dt: dt) }
 

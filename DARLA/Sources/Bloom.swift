@@ -46,9 +46,10 @@ final class BloomController {
     func update(dt: Float) {
         time += dt
         idleClock += dt
-        // only touch the GPU buffer while a flower is actually changing
-        guard flowers.contains(where: { $0.phase == .blooming || $0.dirty }) else { return }
-        let idleTick = false
+        let animating = flowers.contains { $0.phase == .blooming || $0.dirty }
+        guard animating || idleClock > 1.0 / 12 else { return }
+        let idleTick = idleClock > 1.0 / 12
+        if idleTick { idleClock = 0 }
         buffer.withUnsafeMutableBytes { raw in
             let base = raw.bindMemory(to: Float.self).baseAddress!
             for f in flowers {
@@ -58,7 +59,7 @@ final class BloomController {
                 case .blooming:
                     f.t += dt
                     write(f, base: base, open: f.t / Self.bloomDuration, glow: 1)
-                    if f.t >= Self.bloomDuration + 0.8 { f.phase = .alive; f.dirty = true; continue }
+                    if f.t >= Self.bloomDuration + 0.8 { f.phase = .alive }
                 case .alive:
                     if f.dirty || idleTick { write(f, base: base, open: 1.2, glow: 0) }
                 }

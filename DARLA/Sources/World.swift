@@ -18,17 +18,6 @@ struct WorldManifest: Codable {
     let rawSize: Int
     let flowerCount: Int
     let flowers: [FlowerInfo]
-    let tiers: [Int]
-}
-
-/// Detail level. Splats are stored most-important first, so lower tiers only drop the faintest distant ones.
-enum Quality: Int, CaseIterable {
-    case smooth, high, ultra
-    static var current: Quality {
-        get { Quality(rawValue: (UserDefaults.standard.object(forKey: "darla.quality") as? Int) ?? 2) ?? .ultra }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: "darla.quality") }
-    }
-    var label: String { ["Smooth", "High", "Ultra"][rawValue] }
 }
 
 /// Animated flower layer: pos3 scale3 rot4(w,x,y,z) opacity1 sh3 = 14 floats, padded to 16.
@@ -99,8 +88,7 @@ final class WorldLoader: @unchecked Sendable {
             let n = Int(rb.load(fromByteOffset: 8, as: UInt32.self))
             let frac = Float(1 << Int(base[13]))
             let nf = manifest.flowerCount
-            let tierCount = manifest.tiers.indices.contains(Quality.current.rawValue) ? manifest.tiers[Quality.current.rawValue] : n
-            flowerCount = nf; staticCount = min(n, tierCount) - nf
+            flowerCount = nf; staticCount = n - nf
             let posO = 16, alO = posO + n * 9, colO = alO + n, scO = colO + 3 * n, roO = scO + 3 * n
 
             @inline(__always) func splat(_ i: Int) -> (SIMD3<Float>, SIMD3<Float>, SIMD4<Float>, Float, SIMD3<Float>) {
