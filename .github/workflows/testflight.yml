@@ -31,8 +31,8 @@ jobs:
           printf '%s' "$ASC_KEY_P8" > ~/private_keys/AuthKey.p8
       - name: Archive
         env:
-          KID: ${{ secrets.ASC_KEY_ID }}
-          IID: ${{ secrets.ASC_ISSUER_ID }}
+          KID: ${{ secrets.ASC_KEY_ID || '8A77HRD47W' }}
+          IID: f0ca6676-6d47-485a-804b-980f71405470
           TEAM: SG33765Y24
         run: |
           set -o pipefail
@@ -44,8 +44,8 @@ jobs:
           test -d build/DARLA.xcarchive
       - name: Upload to TestFlight
         env:
-          KID: ${{ secrets.ASC_KEY_ID }}
-          IID: ${{ secrets.ASC_ISSUER_ID }}
+          KID: ${{ secrets.ASC_KEY_ID || '8A77HRD47W' }}
+          IID: f0ca6676-6d47-485a-804b-980f71405470
           TEAM: SG33765Y24
         run: |
           /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM" ExportOptions.plist
