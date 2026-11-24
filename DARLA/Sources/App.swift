@@ -22,8 +22,6 @@ extension Font {
 
 struct RootView: View {
     @State private var exp = Experience()
-    @State private var lastDrag: CGSize = .zero
-    @State private var pinchBase: Float = 1
     @State private var showPlaces = false
 
     var body: some View {
@@ -37,9 +35,9 @@ struct RootView: View {
                 }
             }
             .ignoresSafeArea()
-            .gesture(lookGesture)
-            .simultaneousGesture(sizeGesture)
-            .simultaneousGesture(SpatialTapGesture().onEnded { _ in exp.tapArcade() })
+            .allowsHitTesting(false)
+
+            if !exp.loading && exp.started { TouchLayer(exp: exp).ignoresSafeArea() }
 
             if !exp.loading && exp.started && !exp.playing { HUD(exp: exp, showPlaces: $showPlaces).transition(.opacity) }
             if exp.playing { ArcadeOverlay(exp: exp) }
@@ -53,24 +51,6 @@ struct RootView: View {
         .task { await exp.load() }
     }
 
-    private var lookGesture: some Gesture {
-        DragGesture(minimumDistance: 2)
-            .onChanged { v in
-                let d = CGSize(width: v.translation.width - lastDrag.width, height: v.translation.height - lastDrag.height)
-                lastDrag = v.translation
-                exp.look(dx: Float(d.width), dy: Float(d.height))
-            }
-            .onEnded { _ in lastDrag = .zero }
-    }
-
-    private var sizeGesture: some Gesture {
-        MagnifyGesture()
-            .onChanged { v in
-                if pinchBase == 1 { pinchBase = exp.size }
-                exp.setSize(pinchBase / Float(v.magnification))
-            }
-            .onEnded { _ in pinchBase = 1 }
-    }
 }
 
 // MARK: - Intro / loading
@@ -119,10 +99,10 @@ struct HUD: View {
             HStack(alignment: .top) {
                 QuestCard(exp: exp)
                 Spacer()
-                Button { showPlaces = true } label: {
-                    Image(systemName: "sparkles").font(.system(size: 18, weight: .medium)).foregroundStyle(Palette.ink).frame(width: 48, height: 48)
+                VStack(spacing: 10) {
+                    RoundButton(symbol: "map") { showPlaces = true }
+                    RoundButton(symbol: "scope") { exp.recenter() }
                 }
-                .glassEffect(.regular.interactive(), in: .circle)
             }
             Spacer()
             if exp.nearScreen {
@@ -136,7 +116,7 @@ struct HUD: View {
                 .transition(.scale.combined(with: .opacity))
             }
             HStack(alignment: .bottom) {
-                MovePad(exp: exp)
+                GuideButton(exp: exp)
                 Spacer()
                 SizeRail(exp: exp)
             }
@@ -176,21 +156,6 @@ struct PetalPip: View {
     }
 }
 
-/// Hold-to-move arrows (forward, back, turn-strafe) in a single glass disc.
-struct MovePad: View {
-    let exp: Experience
-    var body: some View {
-        ZStack {
-            Circle().fill(.clear).frame(width: 148, height: 148).glassEffect(.regular, in: .circle)
-            HoldArrow(symbol: "chevron.up") { exp.move.y = $0 ? 1 : 0 }.offset(y: -46)
-            HoldArrow(symbol: "chevron.down") { exp.move.y = $0 ? -1 : 0 }.offset(y: 46)
-            HoldArrow(symbol: "chevron.left") { exp.move.x = $0 ? -1 : 0 }.offset(x: -46)
-            HoldArrow(symbol: "chevron.right") { exp.move.x = $0 ? 1 : 0 }.offset(x: 46)
-            Circle().fill(Palette.sun.opacity(0.85)).frame(width: 8, height: 8).shadow(color: Palette.sun, radius: 6)
-        }
-    }
-}
-
 struct HoldArrow: View {
     let symbol: String
     let set: (Bool) -> Void
@@ -210,10 +175,9 @@ struct HoldArrow: View {
 /// The standout control: a glowing vertical rail that sets your size from ant to giant, with rise/sink buttons.
 struct SizeRail: View {
     let exp: Experience
-    private let h: CGFloat = 210
+    private let h: CGFloat = 230
     var body: some View {
         VStack(spacing: 10) {
-            HoldArrow(symbol: "arrow.up") { exp.lift = $0 ? 1 : 0 }.glassEffect(.regular, in: .circle)
             ZStack(alignment: .bottom) {
                 Capsule().fill(.clear).frame(width: 46, height: h).glassEffect(.regular, in: .capsule)
                 Capsule().fill(LinearGradient(colors: [Palette.sun.opacity(0.9), Palette.orchid.opacity(0.5)], startPoint: .bottom, endPoint: .top))
@@ -231,7 +195,6 @@ struct SizeRail: View {
                 let f = Float(1 - max(0, min(1, v.location.y / h)))
                 exp.setSize(0.01 * pow(600, f))
             })
-            HoldArrow(symbol: "arrow.down") { exp.lift = $0 ? -1 : 0 }.glassEffect(.regular, in: .circle)
         }
     }
     private var frac: CGFloat { CGFloat(log(Double(exp.size) / 0.01) / log(600)) }
@@ -299,5 +262,119 @@ struct ArcadeOverlay: View {
             Text("Tap anywhere to flap").font(.footnote).foregroundStyle(.white.opacity(0.6)).padding(.bottom, 30)
         }
         .padding(18)
+    }
+}
+
+
+// MARK: - Touch: floating joystick (left), look (right), tap to glide, pinch to resize
+
+struct TouchLayer: View {
+    let exp: Experience
+    @State private var origin: CGPoint?
+    @State private var knob: CGPoint = .zero
+    @State private var lastLook: CGSize = .zero
+    @State private var pinchBase: Float = 0
+    private let radius: CGFloat = 62
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                HStack(spacing: 0) {
+                    // left: floating analog stick that appears under the thumb
+                    Color.clear.contentShape(Rectangle())
+                        .frame(width: geo.size.width * 0.46)
+                        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("touch"))
+                            .onChanged { v in
+                                if origin == nil { origin = v.startLocation; UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.5) }
+                                var d = CGSize(width: v.location.x - origin!.x, height: v.location.y - origin!.y)
+                                let m = hypot(d.width, d.height)
+                                if m > radius { d.width *= radius / m; d.height *= radius / m }
+                                knob = CGPoint(x: d.width, y: d.height)
+                                // gentle response curve: precise near the center, fast at the edge
+                                let nx = Float(d.width / radius), ny = Float(-d.height / radius)
+                                let mag = min(1, sqrt(nx * nx + ny * ny)), curved = mag * mag * 0.65 + mag * 0.35
+                                exp.setStick(mag > 0.001 ? SIMD2(nx, ny) / mag * curved : .zero)
+                            }
+                            .onEnded { _ in origin = nil; knob = .zero; exp.setStick(.zero) })
+                    // right: look, and tap to glide to a glowing bud
+                    Color.clear.contentShape(Rectangle())
+                        .gesture(DragGesture(minimumDistance: 4)
+                            .onChanged { v in
+                                exp.look(dx: Float(v.translation.width - lastLook.width), dy: Float(v.translation.height - lastLook.height))
+                                lastLook = v.translation
+                            }
+                            .onEnded { _ in lastLook = .zero })
+                        .simultaneousGesture(SpatialTapGesture(coordinateSpace: .named("touch")).onEnded { e in exp.tap(at: e.location) })
+                }
+                if let o = origin {
+                    ZStack {
+                        Circle().strokeBorder(.white.opacity(0.28), lineWidth: 1.5).frame(width: radius * 2, height: radius * 2)
+                            .background(Circle().fill(.white.opacity(0.06)))
+                        Circle().fill(.white.opacity(0.85)).frame(width: 44, height: 44)
+                            .shadow(color: Palette.sun.opacity(0.7), radius: 12)
+                            .offset(x: knob.x, y: knob.y)
+                    }
+                    .position(o).allowsHitTesting(false)
+                }
+                if exp.showCoach && !exp.touring && !exp.playing { Coach().allowsHitTesting(false) }
+                if exp.playing { Color.clear.contentShape(Rectangle()).onTapGesture { exp.tapArcade() } }
+            }
+            .coordinateSpace(name: "touch")
+            .simultaneousGesture(MagnifyGesture()
+                .onChanged { v in
+                    if pinchBase == 0 { pinchBase = exp.size }
+                    exp.setSize(pinchBase / Float(max(0.2, v.magnification)))
+                }
+                .onEnded { _ in pinchBase = 0 })
+            .onAppear { exp.viewSize = geo.size }
+            .onChange(of: geo.size) { _, s in exp.viewSize = s }
+        }
+    }
+}
+
+struct Coach: View {
+    @State private var pulse = false
+    var body: some View {
+        HStack {
+            VStack(spacing: 8) {
+                Image(systemName: "hand.point.up.left.fill").font(.system(size: 28)).symbolEffect(.pulse)
+                Text("Hold & drag\nto fly").font(.system(size: 13, weight: .semibold)).multilineTextAlignment(.center)
+            }.frame(maxWidth: .infinity)
+            VStack(spacing: 8) {
+                Image(systemName: "hand.draw.fill").font(.system(size: 28)).symbolEffect(.pulse)
+                Text("Drag to look\nTap a glow to travel").font(.system(size: 13, weight: .semibold)).multilineTextAlignment(.center)
+            }.frame(maxWidth: .infinity)
+        }
+        .foregroundStyle(.white.opacity(0.85))
+        .shadow(color: .black.opacity(0.7), radius: 10)
+        .frame(maxHeight: .infinity, alignment: .center).offset(y: 70)
+    }
+}
+
+struct RoundButton: View {
+    let symbol: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: { UIImpactFeedbackGenerator(style: .light).impactOccurred(); action() }) {
+            Image(systemName: symbol).font(.system(size: 17, weight: .medium)).foregroundStyle(Palette.ink).frame(width: 48, height: 48)
+        }
+        .glassEffect(.regular.interactive(), in: .circle)
+    }
+}
+
+/// One-tap autopilot: glides from bud to bud, blooming each, then to the arcade.
+struct GuideButton: View {
+    let exp: Experience
+    var body: some View {
+        Button { exp.touring ? exp.cancelAutopilot() : exp.startTour() } label: {
+            HStack(spacing: 10) {
+                Image(systemName: exp.touring ? "pause.fill" : "sparkles")
+                Text(exp.touring ? "Exploring…" : "Guide me").font(.system(size: 15, weight: .semibold))
+            }
+            .foregroundStyle(exp.touring ? Color.black : Palette.ink)
+            .padding(.horizontal, 20).padding(.vertical, 14)
+        }
+        .glassEffect(exp.touring ? .regular.tint(Palette.sun).interactive() : .regular.interactive(), in: .capsule)
+        .animation(.spring(duration: 0.4), value: exp.touring)
     }
 }

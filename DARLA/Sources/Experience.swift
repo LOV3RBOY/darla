@@ -31,8 +31,13 @@ final class Experience {
     var sizeLabel = ""
 
     // input
-    var move = SIMD2<Float>(0, 0)   // x = strafe, y = forward
-    var lift: Float = 0
+    @ObservationIgnored var stick = SIMD2<Float>(0, 0)   // analog: x = strafe, y = forward (fly where you look)
+    @ObservationIgnored var viewSize = CGSize(width: 390, height: 844)
+    @ObservationIgnored private var velocity = SIMD3<Float>(0, 0, 0)
+    @ObservationIgnored private var lookVel = SIMD2<Float>(0, 0)
+    @ObservationIgnored private var autopilot: Task<Void, Never>?
+    var touring = false
+    var showCoach = true
 
     let places: [Place] = [
         .init(name: "The forest floor", detail: "Ladybug-sized among the roots", size: 0.06, pos: [3.05, 0.12, 3.45], look: [2.1, 1.5, 4.5]),
@@ -119,10 +124,16 @@ final class Experience {
             flight = f.t >= 1 ? nil : f
             if flight == nil { syncAnglesFromCamera() }
         } else if !playing {
+            // look with a touch of inertia
+            yaw -= lookVel.x; pitch = max(-1.45, min(1.45, pitch - lookVel.y))
+            lookVel *= pow(0.0001, dt)
             let q = orientation
             let fwd = q.act([0, 0, -1]), right = q.act([1, 0, 0])
-            let sp = 1.3 * size * dt
-            camPos += fwd * move.y * sp + right * move.x * sp + SIMD3(0, lift * sp, 0)
+            let speed = 1.4 * size
+            let target = (fwd * stick.y + right * stick.x) * speed
+            velocity += (target - velocity) * min(1, dt * (simd_length(target) > 0 ? 5 : 3))
+            camPos += velocity * dt
+            camPos = confine(camPos)
             camera.transform.rotation = q
             camera.position = camPos
         }
@@ -173,10 +184,99 @@ final class Experience {
     var orientation: simd_quatf { simd_quatf(angle: yaw, axis: [0, 1, 0]) * simd_quatf(angle: pitch, axis: [1, 0, 0]) }
 
     func look(dx: Float, dy: Float) {
-        guard flight == nil, !playing else { return }
-        yaw -= dx * 0.005
-        pitch = max(-1.45, min(1.45, pitch - dy * 0.005))
+        guard !playing else { return }
+        cancelAutopilot()
+        if flight != nil { flight = nil; syncAnglesFromCamera() }
+        yaw -= dx * 0.0042
+        pitch = max(-1.45, min(1.45, pitch - dy * 0.0042))
+        lookVel = SIMD2(dx, dy) * 0.0042 * 0.35
     }
+    func endLook() {}
+
+    func setStick(_ v: SIMD2<Float>) {
+        if simd_length(v) > 0.05 { cancelAutopilot(); if showCoach { showCoach = false } }
+        stick = v
+    }
+
+    /// Keeps you inside the captured world: above the ground and within the forest's edge.
+    private func confine(_ p: SIMD3<Float>) -> SIMD3<Float> {
+        var q = p
+        q.y = max(0.012 + 0.35 * size, min(9, q.y))
+        let c = SIMD2<Float>(2.2, 4.4), r: Float = 4.6
+        let d = SIMD2(q.x, q.z) - c
+        let len = simd_length(d)
+        if len > r { let k = r / len; q.x = c.x + d.x * k; q.z = c.y + d.y * k; velocity *= 0.5 }
+        return q
+    }
+
+    // MARK: points of interest, tap-to-glide, guided tour
+
+    struct POI { let name: String; let world: SIMD3<Float>; let place: Place; let flower: Int? }
+
+    var pois: [POI] {
+        var list: [POI] = []
+        if let bloom {
+            let front = simd_normalize(SIMD3<Float>(0.68, 0, -0.73))
+            for (i, f) in bloom.flowers.enumerated() {
+                let r = f.splats.info.radius
+                let lift: Float = f.id == "orchids" ? -0.45 : 0.08
+                let pos = f.center + front * (r * 1.5) + SIMD3(0, lift * r * 2, 0)
+                let nm = flowerNames[f.id]?.0 ?? f.id
+                list.append(POI(name: nm, world: f.center, place: Place(name: nm, detail: "", size: max(0.05, r * 0.22), pos: pos, look: f.center), flower: i))
+            }
+        }
+        if awake { list.append(POI(name: "The glowing screen", world: Self.screenCenter, place: places[2], flower: nil)) }
+        return list
+    }
+
+    /// Projects a world point into view coordinates (points). nil when behind the camera.
+    func project(_ w: SIMD3<Float>) -> CGPoint? {
+        let v = orientation.inverse.act(w - camPos)
+        guard v.z < -0.01 else { return nil }
+        let t = tan(camera.camera.fieldOfViewInDegrees * .pi / 360)
+        let aspect = Float(viewSize.width / max(1, viewSize.height))
+        let nx = v.x / (-v.z * t * aspect), ny = v.y / (-v.z * t)
+        return CGPoint(x: CGFloat((nx + 1) / 2) * viewSize.width, y: CGFloat((1 - ny) / 2) * viewSize.height)
+    }
+
+    /// Tap anywhere: if it lands near a glowing bud or the screen, glide there.
+    func tap(at pt: CGPoint) {
+        if playing { tapArcade(); return }
+        var best: (POI, CGFloat)?
+        for p in pois {
+            if let f = p.flower, bloomed.indices.contains(f), bloomed[f] { continue }
+            guard let s = project(p.world) else { continue }
+            let d = hypot(s.x - pt.x, s.y - pt.y)
+            if d < 90, d < (best?.1 ?? .infinity) { best = (p, d) }
+        }
+        if let b = best { cancelAutopilot(); fly(to: b.0.place, quiet: true); toast(b.0.name, "Gliding closer…", "Travelling") }
+    }
+
+    func startTour() {
+        cancelAutopilot()
+        touring = true; showCoach = false
+        autopilot = Task { [weak self] in
+            guard let self else { return }
+            for p in self.pois where p.flower != nil {
+                if Task.isCancelled { break }
+                if let f = p.flower, self.bloomed[f] { continue }
+                self.fly(to: p.place, quiet: true)
+                try? await Task.sleep(for: .seconds(6.5))
+            }
+            if !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(4))
+                if self.awake { self.fly(to: self.places[2], quiet: true) }
+            }
+            self.touring = false
+        }
+    }
+
+    func cancelAutopilot() {
+        if autopilot != nil { autopilot?.cancel(); autopilot = nil; touring = false }
+    }
+
+    func recenter() { cancelAutopilot(); fly(to: places[5]) }
+    var arrived: Bool { flight == nil }
 
     private func aim(from p: SIMD3<Float>, at t: SIMD3<Float>) {
         camPos = p

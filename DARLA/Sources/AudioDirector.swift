@@ -12,6 +12,10 @@ final class AudioDirector {
 
     init() {
         try? AVAudioSession.sharedInstance().setCategory(.ambient, options: [.mixWithOthers])
+        // iOS stops the engine on interruptions/route changes; restart instead of crashing on the next sound
+        for name in [AVAudioSession.interruptionNotification, AVAudioSession.routeChangeNotification, .AVAudioEngineConfigurationChange] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.revive() }
+        }
         reverb.loadFactoryPreset(.cathedral)
         reverb.wetDryMix = 38
         engine.attach(reverb); engine.attach(bed)
@@ -26,13 +30,29 @@ final class AudioDirector {
         guard !running else { return }
         do { try AVAudioSession.sharedInstance().setActive(true); try engine.start() } catch { return }
         running = true
-        bed.scheduleBuffer(makeBed(), at: nil, options: .loops)
+        let b = makeBed(); bedBuffer = b
+        bed.scheduleBuffer(b, at: nil, options: .loops)
         bed.volume = 0.55
         bed.play()
     }
 
+    private func revive() {
+        guard running else { return }
+        if !engine.isRunning {
+            try? AVAudioSession.sharedInstance().setActive(true)
+            try? engine.start()
+        }
+        if engine.isRunning && !bed.isPlaying {
+            bed.scheduleBuffer(bedBuffer ?? makeBed(), at: nil, options: .loops); bed.play()
+        }
+    }
+
+    private var bedBuffer: AVAudioPCMBuffer?
+
     private func play(_ buf: AVAudioPCMBuffer, volume: Float = 1) {
         guard running else { return }
+        if !engine.isRunning { revive() }
+        guard engine.isRunning else { return }
         let v = voices[next]; next = (next + 1) % voices.count
         v.volume = volume
         v.scheduleBuffer(buf, at: nil, options: .interrupts)
