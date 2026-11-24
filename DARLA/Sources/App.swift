@@ -3,6 +3,7 @@ import RealityKit
 
 @main
 struct DarlaApp: App {
+    init() { Diagnostics.shared.start() }
     var body: some SwiftUI.Scene {
         WindowGroup { RootView().preferredColorScheme(.dark).statusBarHidden() }
     }
@@ -23,6 +24,7 @@ extension Font {
 struct RootView: View {
     @State private var exp = Experience()
     @State private var showPlaces = false
+    @State private var report: String?
 
     var body: some View {
         ZStack {
@@ -48,7 +50,9 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.6), value: exp.loading)
         .animation(.spring(duration: 0.5), value: exp.nearScreen)
         .sheet(isPresented: $showPlaces) { PlacesSheet(exp: exp, show: $showPlaces).presentationDetents([.medium]).presentationBackground(.ultraThinMaterial) }
-        .task { await exp.load() }
+        .overlay { if let r = report { CrashCard(text: r) { Diagnostics.shared.clearReport(); report = nil } } }
+        .onReceive(NotificationCenter.default.publisher(for: .darlaDiagnostics)) { _ in report = Diagnostics.shared.pendingReport }
+        .task { report = Diagnostics.shared.pendingReport; await exp.load() }
     }
 
 }
@@ -419,5 +423,36 @@ struct GuideButton: View {
         }
         .glassEffect(exp.touring ? .regular.tint(Palette.sun).interactive() : .regular.interactive(), in: .capsule)
         .animation(.spring(duration: 0.4), value: exp.touring)
+    }
+}
+
+
+/// Shown on the launch after an unexpected exit: one tap copies everything needed to fix it.
+struct CrashCard: View {
+    let text: String
+    let dismiss: () -> Void
+    @State private var copied = false
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 14) {
+                Text("The last session ended unexpectedly").font(.display(24, .regular)).foregroundStyle(Palette.ink)
+                Text("Copy this report and paste it to Claude so it can be fixed.").font(.footnote).foregroundStyle(.white.opacity(0.7))
+                ScrollView { Text(text).font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.75)).frame(maxWidth: .infinity, alignment: .leading) }
+                    .frame(maxHeight: 260)
+                HStack {
+                    Button { UIPasteboard.general.string = text; copied = true; UINotificationFeedbackGenerator().notificationOccurred(.success) } label: {
+                        Label(copied ? "Copied" : "Copy report", systemImage: copied ? "checkmark" : "doc.on.doc").font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.black).padding(.horizontal, 20).padding(.vertical, 12)
+                    }
+                    .glassEffect(.regular.tint(Palette.sun).interactive(), in: .capsule)
+                    Spacer()
+                    Button("Close", action: dismiss).foregroundStyle(Palette.ink).padding(.horizontal, 16)
+                }
+            }
+            .padding(22)
+            .glassEffect(.regular, in: .rect(cornerRadius: 26))
+            .padding(20)
+        }
     }
 }

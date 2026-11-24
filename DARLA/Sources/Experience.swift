@@ -101,9 +101,12 @@ final class Experience {
 
     func load() async {
         do {
+            Diagnostics.shared.log("load: decoding world")
             let w = try await Task.detached(priority: .userInitiated) { try WorldLoader() }.value
+            Diagnostics.shared.log("load: decoded \(w.staticCount) + \(w.flowerCount) splats · \(Int(Diagnostics.footprintMB())) MB")
             world = w
             let e = try w.makeEntities()
+            Diagnostics.shared.log("load: splat entities created")
             root.addChild(e.world)
             root.addChild(e.flowers)
             bloom = BloomController(world: w)
@@ -114,13 +117,16 @@ final class Experience {
             buildScreen()
             bloom?.update(dt: 0)
             loading = false
+            Diagnostics.shared.log("load: ready · \(Int(Diagnostics.footprintMB())) MB")
         } catch {
+            Diagnostics.shared.log("load FAILED: \(error)")
             loadError = "The forest couldn't grow on this device (\(error))."
         }
     }
 
     func start() {
         started = true
+        Diagnostics.shared.log("start")
         audio.start()
         if let s = places.first(where: { $0.id == "shrine" }) { go(to: s, quiet: true) }
         Task {
@@ -238,6 +244,7 @@ final class Experience {
 
     func toggleMode() {
         cancelAutopilot()
+        Diagnostics.shared.log("mode toggle")
         if mode == .orbit {
             camPos = camera.position
             let f = camera.transform.rotation.act([0, 0, -1])
@@ -256,6 +263,7 @@ final class Experience {
 
     func go(to p: Place, quiet: Bool = false) {
         if mode == .free { mode = .orbit }
+        Diagnostics.shared.log("go \(p.id)")
         focusID = p.id
         focusT = p.focus
         distT = p.dist
@@ -292,6 +300,7 @@ final class Experience {
 
     func startTour() {
         cancelAutopilot()
+        Diagnostics.shared.log("tour")
         touring = true; hideCoach()
         autopilot = Task { [weak self] in
             guard let self else { return }
@@ -318,6 +327,7 @@ final class Experience {
 
     private func trigger(_ i: Int) {
         guard let bloom, let world else { return }
+        Diagnostics.shared.log("bloom \(i)")
         bloom.bloom(bloom.flowers[i])
         bloomed[i] = true
         if i < bursts.count, var pe = bursts[i].components[ParticleEmitterComponent.self] { pe.burst(); bursts[i].components.set(pe) }
@@ -331,6 +341,7 @@ final class Experience {
 
     private func wake() {
         awake = true
+        Diagnostics.shared.log("wake")
         audio.wake()
         haptic.impactOccurred(intensity: 1)
         screen?.isEnabled = true
@@ -360,6 +371,7 @@ final class Experience {
 
     func startGame() {
         playing = true; nearScreen = false
+        Diagnostics.shared.log("game start")
         arcade.begin()
         audio.coin()
         if let s = places.first(where: { $0.id == "screen" }) { go(to: Place(id: "screen", name: s.name, detail: "", focus: s.focus, dist: 0.5, theta: s.theta, phi: s.phi), quiet: true) }
