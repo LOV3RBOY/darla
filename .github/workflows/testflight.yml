@@ -56,6 +56,7 @@ jobs:
         run: |
           mkdir -p build
           ci/report.sh "archiving"
+          ( while true; do sleep 60; ci/report.sh "archiving (live)" build/archive.log; done ) &
           if ! xcodebuild -project DARLA.xcodeproj -scheme DARLA -configuration Release \
             -destination 'generic/platform=iOS' -archivePath build/DARLA.xcarchive archive \
             -allowProvisioningUpdates -authenticationKeyPath ~/private_keys/AuthKey.p8 \
