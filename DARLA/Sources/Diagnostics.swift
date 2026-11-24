@@ -12,6 +12,8 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
     private let lock = NSLock()
     private var timer: Timer?
     private var peakMB: Double = 0
+    private var frames = 0, frameTime: Double = 0, worstFrame: Double = 0
+    func frame(_ dt: Double) { frames += 1; frameTime += dt; worstFrame = max(worstFrame, dt) }
     private(set) var pendingReport: String?
 
     private var crumbsURL: URL { dir.appendingPathComponent("breadcrumbs.txt") }
@@ -62,7 +64,9 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
         peakMB = max(peakMB, mb)
         let thermal: String
         switch ProcessInfo.processInfo.thermalState { case .nominal: thermal = "cool"; case .fair: thermal = "warm"; case .serious: thermal = "HOT"; case .critical: thermal = "CRITICAL"; @unknown default: thermal = "?" }
-        log(String(format: "mem %.0f MB (peak %.0f) · %@", mb, peakMB, thermal))
+        let fps = frames > 0 ? Double(frames) / max(frameTime, 0.001) : 0
+        log(String(format: "mem %.0f MB (peak %.0f) · %.0f fps · worst %.0f ms · %@", mb, peakMB, fps, worstFrame * 1000, thermal))
+        frames = 0; frameTime = 0; worstFrame = 0
         flush()
     }
 

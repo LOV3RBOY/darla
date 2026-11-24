@@ -444,8 +444,9 @@ struct CrashCard: View {
                     Button { UIPasteboard.general.string = text; copied = true; UINotificationFeedbackGenerator().notificationOccurred(.success) } label: {
                         Label(copied ? "Copied" : "Copy report", systemImage: copied ? "checkmark" : "doc.on.doc").font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.black).padding(.horizontal, 20).padding(.vertical, 12)
+                            .background(Capsule().fill(Palette.sun))
                     }
-                    .glassEffect(.regular.tint(Palette.sun).interactive(), in: .capsule)
+                    .buttonStyle(.plain)
                     Spacer()
                     Button("Close", action: dismiss).foregroundStyle(Palette.ink).padding(.horizontal, 16)
                 }
